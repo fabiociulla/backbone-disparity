@@ -10,7 +10,7 @@ import networkx as nx
 def plot_metrics(
     alphas: list[float],
     community_scores: list[float],
-    gc_ratios: list[float],
+    non_orphan_ratios: list[float],
     combined_scores: list[float],
     method: str = "louvain",
     best_alpha: float | None = None,
@@ -27,14 +27,14 @@ def plot_metrics(
 
     Parameters
     ----------
-    alphas, community_scores, gc_ratios, combined_scores : parallel lists
+    alphas, community_scores, non_orphan_ratios, combined_scores : parallel lists
     method     : 'louvain' or 'infomap'  (used for axis label)
     best_alpha : if provided, adds a vertical dashed line
     save_path  : if provided, saves the figure to that path
     """
     alphas = np.array(alphas)
     community_scores = np.array(community_scores)
-    gc_ratios = np.array(gc_ratios)
+    non_orphan_ratios = np.array(non_orphan_ratios)
     combined_scores = np.array(combined_scores)
 
     metric_label = (
@@ -56,13 +56,13 @@ def plot_metrics(
     ax1.set_ylabel(metric_label, color=color_comm, fontsize=12)
     ax1.tick_params(axis="y", labelcolor=color_comm)
 
-    # ── Right axis: GC ratio & combined score ─────────────────────────────────
-    color_gc   = "#4dac26"
+    # ── Right axis: NO ratio & combined score ─────────────────────────────────
+    color_no   = "#4dac26"
     color_comb = "#d01c8b"
 
     l2, = ax2.plot(
-        alphas, gc_ratios,
-        color=color_gc, lw=2, linestyle="--", label="GC ratio",
+        alphas, non_orphan_ratios,
+        color=color_no, lw=2, linestyle="--", label="Non-orphan ratio",
     )
     l3, = ax2.plot(
         alphas, combined_scores,
@@ -70,7 +70,7 @@ def plot_metrics(
     )
     # ── Right axis: non-orphan ratio & combined score ─────────────────────────
     ax2.set_ylabel("Non-orphan ratio / Combined score", fontsize=12)  # ← updated label
-    ax2.set_ylim(0, max(gc_ratios.max(), combined_scores.max()) * 1.15)
+    ax2.set_ylim(0, max(non_orphan_ratios.max(), combined_scores.max()) * 1.15)
 
     # ── Star at argmax combined score ─────────────────────────────────────────
     best_idx = int(np.argmax(combined_scores))
