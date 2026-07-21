@@ -162,7 +162,7 @@ def compute_backbone(
             fig = plot_metrics(
                 alphas=alphas,
                 community_scores=comm_scores,
-                gc_ratios=nor_values,      # plotting.py still accepts this arg
+                non_orphan_ratios=nor_values,      # plotting.py still accepts this arg
                 combined_scores=comb_scores,
                 method=method,
                 best_alpha=best_alpha_val,
@@ -204,7 +204,7 @@ def compute_backbone(
             fig = plot_metrics(
                 alphas=alphas_plot,
                 community_scores=comm_s,
-                gc_ratios=nor_s,           # plotting.py still accepts this arg
+                non_orphan_ratios=nor_s,           # plotting.py still accepts this arg
                 combined_scores=comb_s,
                 method=method,
                 best_alpha=alpha_opt,
