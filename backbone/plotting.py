@@ -10,38 +10,27 @@ import networkx as nx
 def plot_metrics(
     alphas: list[float],
     community_scores: list[float],
-    non_orphan_ratios: list[float],
-    combined_scores: list[float],
+    multipliers_dict: dict[str, list[float]],
+    combined_scores_dict: dict[str, list[float]],
+    best_alphas_dict: dict[str, float],
     method: str = "louvain",
-    best_alpha: float | None = None,
     save_path: str | None = None,
-    log_scale: bool = True,          # ← new parameter
+    log_scale: bool = True,
 ) -> plt.Figure:
 
     """
     Single-panel figure with twin y-axes:
       left  → community metric (Q or −codelength)
-      right → giant-component ratio & combined score
-
-    A ★ marker is placed at the alpha with the highest combined score.
-
-    Parameters
-    ----------
-    alphas, community_scores, non_orphan_ratios, combined_scores : parallel lists
-    method     : 'louvain' or 'infomap'  (used for axis label)
-    best_alpha : if provided, adds a vertical dashed line
-    save_path  : if provided, saves the figure to that path
+      right → dynamic multipliers & combined scores per rationale
     """
     alphas = np.array(alphas)
     community_scores = np.array(community_scores)
-    non_orphan_ratios = np.array(non_orphan_ratios)
-    combined_scores = np.array(combined_scores)
 
     metric_label = (
         "Modularity $Q$" if method.lower() == "louvain" else "$-$Codelength"
     )
 
-    fig, ax1 = plt.subplots(figsize=(8, 4.5))
+    fig, ax1 = plt.subplots(figsize=(16, 10), facecolor="white")
     ax2 = ax1.twinx()
 
     # ── Left axis: community score ────────────────────────────────────────────
@@ -51,51 +40,74 @@ def plot_metrics(
         color=color_comm, lw=2, label=metric_label,
     )
     ax1.set_xlabel(r"$\alpha$", fontsize=13)
-    if log_scale:                          # ← add this
-        ax1.set_xscale("log")              # ← and this
+    if log_scale:
+        ax1.set_xscale("log")
     ax1.set_ylabel(metric_label, color=color_comm, fontsize=12)
     ax1.tick_params(axis="y", labelcolor=color_comm)
 
-    # ── Right axis: NO ratio & combined score ─────────────────────────────────
-    color_no   = "#4dac26"
-    color_comb = "#d01c8b"
+    # ── Right axis: Dynamic Multipliers & Combined Scores ─────────────────────
+    # Pre-defined contrasting palettes (Multiplier Color, Combined Color)
+    palettes = [
+        ("#4dac26", "#d01c8b"),  # Green & Magenta
+        ("#e66101", "#5e3c99"),  # Orange & Purple
+        ("#0571b0", "#ca0020"),  # Light Blue & Red
+        ("#008837", "#7b3294"),  # Dark Green & Dark Purple
+    ]
 
-    l2, = ax2.plot(
-        alphas, non_orphan_ratios,
-        color=color_no, lw=2, linestyle="--", label="Non-orphan ratio",
-    )
-    l3, = ax2.plot(
-        alphas, combined_scores,
-        color=color_comb, lw=2.5, linestyle="-.", label="Combined score",
-    )
-    # ── Right axis: non-orphan ratio & combined score ─────────────────────────
-    ax2.set_ylabel("Non-orphan ratio / Combined score", fontsize=12)  # ← updated label
-    ax2.set_ylim(0, max(non_orphan_ratios.max(), combined_scores.max()) * 1.15)
+    ax2.set_ylabel("Multipliers & Combined Scores", fontsize=12)
+    
+    handles = [l1]
+    global_max = 0.0
 
-    # ── Star at argmax combined score ─────────────────────────────────────────
-    best_idx = int(np.argmax(combined_scores))
-    ax2.plot(
-        alphas[best_idx], combined_scores[best_idx],
-        marker="*", markersize=16, color=color_comb,
-        zorder=5, linestyle="None",
-    )
+    for idx, (rat, mult_vals) in enumerate(multipliers_dict.items()):
+        c_mult, c_comb = palettes[idx % len(palettes)]
+        
+        mults = np.array(mult_vals)
+        combs = np.array(combined_scores_dict[rat])
+        best_alpha = best_alphas_dict[rat]
+        
+        # Track the absolute maximum to scale the Y axis accurately
+        global_max = max(global_max, mults.max(), combs.max())
+        
+        l_m, = ax2.plot(
+            alphas, mults,
+            color=c_mult, lw=2, linestyle="--", 
+            label=f"{rat.title()} Multiplier",
+        )
+        l_c, = ax2.plot(
+            alphas, combs,
+            color=c_comb, lw=2.5, linestyle="-.", 
+            label=f"Combined ({rat.title()})",
+        )
+        
+        # Star at argmax combined score
+        best_idx = int(np.argmax(combs))
+        ax2.plot(
+            alphas[best_idx], combs[best_idx],
+            marker="o", markersize=16, color=c_comb,
+            zorder=5, linestyle="None",
+        )
+        
+        # Vertical line for best alpha
+        ax1.axvline(best_alpha, color=c_comb, lw=1, linestyle=":", alpha=0.7)
+        
+        star_handle = mlines.Line2D(
+            [], [], marker="o", color=c_comb, markersize=12,
+            linestyle="None", label=f"Best α ({rat}) = {best_alpha:.3f}",
+        )
+        handles.extend([l_m, l_c, star_handle])
 
-    # Optional vertical line at externally supplied best_alpha
-    if best_alpha is not None:
-        ax1.axvline(best_alpha, color="gray", lw=1, linestyle=":",
-                    label=f"best α={best_alpha:.3f}")
+    ax2.set_ylim(0, global_max * 1.15)
 
-    # ── Unified legend (single call across both axes) ─────────────────────────
-    star_handle = mlines.Line2D(
-        [], [], marker="*", color=color_comb, markersize=12,
-        linestyle="None", label=f"Best $\\alpha$={alphas[best_idx]:.3f}",
-    )
-    handles = [l1, l2, l3, star_handle]
+    # ── Unified legend ────────────────────────────────────────────────────────
     labels  = [h.get_label() for h in handles]
-    ax1.legend(handles, labels, loc="upper right", framealpha=0.9, fontsize=10)
+    # Place legend slightly outside if there are many entries to avoid covering data
+    ax1.legend(handles, labels, loc="center left", bbox_to_anchor=(1.10, 0.5), framealpha=0.9, fontsize=10)
 
     ax1.set_title("Backbone disparity filter — metrics vs $\\alpha$", fontsize=13)
-    fig.tight_layout()
+    
+    # Adjust layout to fit external legend
+    fig.tight_layout(rect=[0, 0, 0.85, 1])
 
     if save_path is not None:
         fig.savefig(save_path, dpi=150, bbox_inches="tight")

@@ -1,4 +1,4 @@
-"""Scoring: non-orphan ratio and combined score."""
+"""Scoring: multipliers and combined scores."""
 
 from __future__ import annotations
 
@@ -19,30 +19,40 @@ def non_orphan_ratio(G: nx.Graph) -> float:
     return n_non_orphan / G.number_of_nodes()
 
 
-def combined_score(community_score: float, ratio: float) -> float:
-    """community_score × non-orphan ratio."""
-    return community_score * ratio
+def giant_component_ratio(G: nx.Graph) -> float:
+    """
+    Fraction of nodes belonging to the largest connected component.
+    """
+    if G.number_of_nodes() == 0:
+        return 0.0
+    largest_cc = max(nx.connected_components(G), key=len)
+    return len(largest_cc) / G.number_of_nodes()
 
 
 def evaluate_backbone(
     G: nx.Graph,
     method: str = "louvain",
-) -> tuple[dict, float, float, float]:
+    rationales: list[str] | None = None,
+) -> tuple[dict, float, dict[str, float], dict[str, float]]:
     """
     Run community detection on G and return all scoring information.
 
     Parameters
     ----------
-    G      : backbone graph
-    method : 'louvain' or 'infomap'
+    G          : backbone graph
+    method     : 'louvain' or 'infomap'
+    rationales : list of rationale names to calculate multipliers for
 
     Returns
     -------
-    partition      : dict[node → community_id]
-    score          : community metric (Q or –codelength)
-    non_orphan_r   : fraction of nodes with degree > 0 in G
-    combined       : score × non_orphan_ratio
+    partition   : dict[node → community_id]
+    score       : community metric (Q or –codelength)
+    multipliers : dict[rationale → multiplier_value]
+    combined    : dict[rationale → score × multiplier_value]
     """
+    if rationales is None:
+        rationales = ["non orphan ratio"]
+
     method = method.lower()
     if method == "louvain":
         partition, score = compute_louvain(G)
@@ -51,6 +61,19 @@ def evaluate_backbone(
     else:
         raise ValueError(f"Unknown method '{method}'. Choose 'louvain' or 'infomap'.")
 
-    nor = non_orphan_ratio(G)
-    comb = combined_score(score, nor)
-    return partition, score, nor, comb
+    multipliers = {}
+    combined = {}
+    
+    # Easily extensible to new rationales in the future
+    for rat in rationales:
+        if rat == "non orphan ratio":
+            val = non_orphan_ratio(G)
+        elif rat == "giant component ratio":
+            val = giant_component_ratio(G)
+        else:
+            raise ValueError(f"Unknown rationale metric '{rat}'.")
+        
+        multipliers[rat] = val
+        combined[rat] = score * val
+
+    return partition, score, multipliers, combined
