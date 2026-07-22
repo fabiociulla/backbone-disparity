@@ -58,7 +58,8 @@ def demo_single_alpha(G: nx.Graph) -> None:
     print("DEMO 1 — Single alpha (α = 0.15, Louvain)")
     print("=" * 60)
 
-    result = compute_backbone(G, alpha=0.15, method="louvain", plot=False)
+    results = compute_backbone(G, alpha=0.15, method="louvain", plot=False)
+    result = results["non orphan ratio"]
 
     print(f"  Original graph : {G.number_of_nodes()} nodes, "
           f"{G.number_of_edges()} edges")
@@ -66,7 +67,7 @@ def demo_single_alpha(G: nx.Graph) -> None:
           f"{result.backbone.number_of_edges()} edges")
     print(f"  Alpha          : {result.alpha:.4f}")
     print(f"  Modularity Q   : {result.score:.4f}")
-    print(f"  GC ratio       : {result.gc_ratio:.4f}")
+    print(f"  Multiplier     : {result.multiplier_value:.4f}")
     print(f"  Combined score : {result.combined_score:.4f}")
     print(f"  # communities  : {len(set(result.communities.values()))}")
 
@@ -88,19 +89,20 @@ def demo_range_alpha(G: nx.Graph) -> None:
 
     alphas = np.linspace(0.01, 0.95, 40).tolist()
 
-    result = compute_backbone(
+    results = compute_backbone(
         G,
         alpha=alphas,
         method="louvain",
         plot=True,
         save_plot="backbone_metrics_range.png",
     )
+    result = results["non orphan ratio"]
 
     print(f"  Swept {len(alphas)} alpha values from "
           f"{alphas[0]:.2f} to {alphas[-1]:.2f}")
     print(f"  Best alpha     : {result.alpha:.4f}")
     print(f"  Modularity Q   : {result.score:.4f}")
-    print(f"  GC ratio       : {result.gc_ratio:.4f}")
+    print(f"  Multiplier     : {result.multiplier_value:.4f}")
     print(f"  Combined score : {result.combined_score:.4f}")
     print(f"  # communities  : {len(set(result.communities.values()))}")
     print(f"  Backbone       : {result.backbone.number_of_nodes()} nodes, "
@@ -108,12 +110,12 @@ def demo_range_alpha(G: nx.Graph) -> None:
     print(f"  Diagnostic plot saved to: backbone_metrics_range.png")
 
     # Print a compact sweep table
-    print("\n  α        Q       GC      Combined")
+    print("\n  α        Q       Mult    Combined")
     print("  " + "-" * 38)
     for rec in result.alphas_data:
         marker = " ← best" if abs(rec.alpha - result.alpha) < 1e-9 else ""
         print(f"  {rec.alpha:.3f}   {rec.community_score:+.4f}  "
-              f"{rec.gc_ratio:.4f}  {rec.combined_score:.4f}{marker}")
+              f"{rec.multiplier_value:.4f}  {rec.combined_score:.4f}{marker}")
 
 
 # ── 3. Automatic alpha search ─────────────────────────────────────────────────
@@ -123,7 +125,7 @@ def demo_auto_search(G: nx.Graph) -> None:
     print("DEMO 3 — Automatic alpha search via golden-section (Louvain)")
     print("=" * 60)
 
-    result = compute_backbone(
+    results = compute_backbone(
         G,
         alpha=None,       # triggers golden-section search
         method="louvain",
@@ -131,10 +133,11 @@ def demo_auto_search(G: nx.Graph) -> None:
         plot=True,
         save_plot="backbone_metrics_search.png",
     )
+    result = results["non orphan ratio"]
 
     print(f"  Optimal alpha  : {result.alpha:.6f}")
     print(f"  Modularity Q   : {result.score:.4f}")
-    print(f"  GC ratio       : {result.gc_ratio:.4f}")
+    print(f"  Multiplier     : {result.multiplier_value:.4f}")
     print(f"  Combined score : {result.combined_score:.4f}")
     print(f"  # communities  : {len(set(result.communities.values()))}")
     print(f"  Backbone       : {result.backbone.number_of_nodes()} nodes, "
@@ -153,7 +156,8 @@ def demo_matrix_input(G: nx.Graph) -> None:
     print(f"  Matrix shape   : {M.shape}")
     print(f"  Symmetric      : {np.allclose(M, M.T)}")
 
-    result = compute_backbone(M, alpha=0.2, method="louvain", plot=False)
+    results = compute_backbone(M, alpha=0.2, method="louvain", plot=False)
+    result = results["non orphan ratio"]
 
     print(f"  Backbone       : {result.backbone.number_of_nodes()} nodes, "
           f"{result.backbone.number_of_edges()} edges")
@@ -168,12 +172,13 @@ def demo_infomap(G: nx.Graph) -> None:
     print("DEMO 5 — Infomap community detection (α = 0.15)")
     print("=" * 60)
 
-    result = compute_backbone(G, alpha=0.15, method="infomap", plot=False)
+    results = compute_backbone(G, alpha=0.15, method="infomap", plot=False)
+    result = results["non orphan ratio"]
 
     print(f"  Backbone       : {result.backbone.number_of_nodes()} nodes, "
           f"{result.backbone.number_of_edges()} edges")
     print(f"  −Codelength    : {result.score:.4f}")
-    print(f"  GC ratio       : {result.gc_ratio:.4f}")
+    print(f"  Multiplier     : {result.multiplier_value:.4f}")
     print(f"  Combined score : {result.combined_score:.4f}")
     print(f"  # communities  : {len(set(result.communities.values()))}")
 
@@ -185,7 +190,8 @@ def demo_visualise(G: nx.Graph) -> None:
     print("DEMO 6 — Visualisation of original vs backbone")
     print("=" * 60)
 
-    result = compute_backbone(G, alpha=0.15, method="louvain", plot=False)
+    results = compute_backbone(G, alpha=0.15, method="louvain", plot=False)
+    result = results["non orphan ratio"]
     B = result.backbone
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
