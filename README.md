@@ -5,6 +5,7 @@ A Python library for extracting the **backbone** of a weighted network using the
 combined with community detection to identify the most meaningful network structure.
 
 ---
+## WARNING: Tests not updated yet!!!
 
 ## Table of Contents
 
