@@ -84,19 +84,13 @@ algorithms:
 | **Louvain** | Modularity *Q* ∈ (−1, 1) | Higher → clearer community structure |
 | **Infomap** | −Codelength (bits) | Higher (less negative) → more compressible, clearer structure |
 
-Both scores are unified so that **higher is always better**, making them
-interchangeable in the optimisation step.
+To account for backbone networks that are highly fragmented by strict filtering, the raw community score is multiplied by a structural **rationale metric**:
 
-To account for backbone networks that are highly fragmented, the raw community
-score is multiplied by the **non-orphan ratio** — the fraction of nodes with
-degree > 0 in the backbone at that specific alpha value:
+$$\text{combined score}(\alpha) = \text{community score}(\alpha) \times \text{multiplier}(\alpha)$$
 
-$$\text{combined score}(\alpha) = \text{community score}(\alpha) \times \frac{|\{v \in V : \deg_\alpha(v) > 0\}|}{|V|}$$
-
-This penalises alpha values that over-prune the network into isolated nodes,
-even if the surviving connected nodes have high modularity. Unlike the
-giant-component ratio, this metric accounts for all connected nodes across
-every component, not just the largest one.
+You can optimize the backbone using one or more rationales simultaneously via the `rationales` parameter. The currently supported rationales are:
+1. **`"non orphan ratio"`** (default): The fraction of nodes with degree > 0 in the backbone. Penalises alpha values that over-prune the network into isolated nodes.
+2. **`"giant component ratio"`**: The fraction of original nodes belonging to the largest connected component of the backbone. Heavily penalises fragmentation into disconnected islands.
 
 ### Choosing Alpha Automatically
 
@@ -197,6 +191,7 @@ pytest tests/ -v --tb=short
 
 ## Quick Start
 
+
 ```python
 import networkx as nx
 from backbone import compute_backbone
@@ -206,15 +201,16 @@ G = nx.karate_club_graph()
 for u, v in G.edges():
     G[u][v]["weight"] = 1.0          # add weights if missing
 
-# Let the library find the best alpha automatically
-result = compute_backbone(G)
+# Let the library find the best alphas automatically
+results = compute_backbone(G)
+best = results["non orphan ratio"]   # Extract the default rationale
 
-print(f"Best alpha      : {result.alpha:.4f}")
-print(f"Backbone edges  : {result.backbone.number_of_edges()}")
-print(f"Modularity Q    : {result.score:.4f}")
-print(f"GC ratio        : {result.gc_ratio:.4f}")
-print(f"Combined score  : {result.combined_score:.4f}")
-print(f"Communities     : {set(result.communities.values())}")
+print(f"Best alpha      : {best.alpha:.4f}")
+print(f"Backbone edges  : {best.backbone.number_of_edges()}")
+print(f"Modularity Q    : {best.score:.4f}")
+print(f"Multiplier      : {best.multiplier_value:.4f}")
+print(f"Combined score  : {best.combined_score:.4f}")
+print(f"Communities     : {set(best.communities.values())}")
 ```
 
 ---
@@ -254,13 +250,17 @@ result = compute_backbone(G, alpha=0.1)
 ### Single Alpha
 
 ```python
-result = compute_backbone(G, alpha=0.05, method="louvain", plot=False)
+results = compute_backbone(
+    G, alpha=0.05, method="louvain", plot=False,
+    rationales=["non orphan ratio", "giant component ratio"]
+)
 
-print(result.backbone)       # nx.Graph – the backbone network
-print(result.communities)    # dict: node → community id
-print(result.score)          # modularity Q
-print(result.gc_ratio)       # fraction of nodes in giant component
-print(result.combined_score) # Q × gc_ratio
+res_gc = results["giant component ratio"]
+print(res_gc.backbone)       # nx.Graph – the backbone network
+print(res_gc.communities)    # dict: node → community id
+print(res_gc.score)          # modularity Q
+print(res_gc.multiplier_value) # fraction of nodes in giant component
+print(res_gc.combined_score) # Q × multiplier_value
 ```
 
 ---
@@ -277,20 +277,19 @@ from backbone import compute_backbone
 
 alphas = np.linspace(0.01, 0.95, 50).tolist()
 
-result = compute_backbone(
-    G,
-    alpha=alphas,
-    method="louvain",
-    plot=True,
-    save_plot="backbone_metrics.png",
+results = compute_backbone(
+    G, alpha=alphas, method="louvain", plot=True, save_plot="backbone_metrics.png",
+    rationales=["non orphan ratio", "giant component ratio"]
 )
 
-print(f"Best alpha : {result.alpha:.4f}")
+# Inspect best alphas for each rationale
+for rationale, best_result in results.items():
+    print(f"Best alpha for '{rationale}': {best_result.alpha:.4f}")
 
-# Inspect the full sweep
-for record in result.alphas_data:
+# Inspect the full sweep for one rationale
+for record in results["non orphan ratio"].alphas_data:
     print(f"  α={record.alpha:.3f}  Q={record.community_score:.3f}  "
-          f"GC={record.gc_ratio:.3f}  combined={record.combined_score:.3f}")
+          f"Mult={record.multiplier_value:.3f}  combined={record.combined_score:.3f}")
 ```
 
 ---
@@ -300,15 +299,17 @@ for record in result.alphas_data:
 ```python
 from backbone import compute_backbone
 
-result = compute_backbone(
+results = compute_backbone(
     G,
     alpha=None,       # default — triggers golden-section search
     method="infomap",
     tol=1e-3,
     plot=True,
+    rationales=["non orphan ratio", "giant component ratio"]
 )
 
-print(f"Optimal alpha found: {result.alpha:.4f}")
+print(f"Optimum (Non Orphan) : {results['non orphan ratio'].alpha:.4f}")
+print(f"Optimum (Giant Comp) : {results['giant component ratio'].alpha:.4f}")
 ```
 
 The search typically requires **~45 backbone evaluations** to converge,
@@ -331,15 +332,16 @@ result = compute_backbone(G, alpha=0.1, method="infomap")
 ### Working with the Result
 
 ```python
-result = compute_backbone(G, alpha=0.1)
+results = compute_backbone(G, alpha=0.1)
+best = results["non orphan ratio"]
 
 # Access the backbone as a standard NetworkX graph
-B = result.backbone
+B = best.backbone
 print(nx.info(B))
 
 # Visualise with communities as colours
 import matplotlib.pyplot as plt
-node_colors = [result.communities[n] for n in B.nodes()]
+node_colors = [best.communities[n] for n in B.nodes()]
 nx.draw(B, node_color=node_colors, with_labels=True, cmap="tab10")
 plt.show()
 
@@ -364,6 +366,8 @@ backbone.compute_backbone(
     tol=1e-3,
     plot=True,
     save_plot=None,
+    log_scale=True,
+    rationales=None,
 )
 ```
 
@@ -387,14 +391,15 @@ backbone.compute_backbone(
 ```python
 @dataclass
 class BackboneResult:
-    alpha          : float             # best / supplied / searched alpha
-    backbone       : nx.Graph          # backbone network at best alpha
-    communities    : dict              # node → community id
-    score          : float             # community metric (Q or −codelength)
-    non_orphan_ratio : float             # fraction of nodes with degree > 0 in backbone
-    combined_score : float             # score × gc_ratio
-    method         : str               # 'louvain' or 'infomap'
-    alphas_data    : list[AlphaRecord] # populated in range mode only
+    rationale        : str               # e.g., 'non orphan ratio'
+    alpha            : float             # best / supplied / searched alpha
+    backbone         : nx.Graph          # backbone network at best alpha
+    communities      : dict              # node → community id
+    score            : float             # community metric (Q or −codelength)
+    multiplier_value : float             # value of the rationale metric at this alpha
+    combined_score   : float             # score × multiplier_value
+    method           : str               # 'louvain' or 'infomap'
+    alphas_data      : list[AlphaRecord] # populated in range mode only
 ```
 
 Each entry in `alphas_data` is an `AlphaRecord`:
@@ -402,10 +407,11 @@ Each entry in `alphas_data` is an `AlphaRecord`:
 ```python
 @dataclass
 class AlphaRecord:
-    alpha           : float
-    community_score : float
-    non_orphan_ratio        : float
-    combined_score  : float
+    alpha            : float
+    community_score  : float
+    multiplier_value : float
+    combined_score   : float
+    rationale        : str
 ```
 
 ---
@@ -417,10 +423,10 @@ produced with **twin y-axes**:
 
 ```
 left  axis  →  community metric (Q  or  −codelength)
-right axis  →  giant-component ratio  &  combined score
+right axis  →  dynamic multipliers & combined scores per rationale
 x-axis      →  α values
-★           →  argmax of combined score
-· · ·       →  vertical dotted line at the returned best alpha
+★           →  argmax of combined score(s)
+· · ·       →  vertical dotted lines at the returned best alpha(s)
 ```
 
 Save the figure by passing `save_plot="my_figure.png"` to `compute_backbone`.
