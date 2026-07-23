@@ -9,6 +9,14 @@ Covers:
   5. Infomap instead of Louvain
 """
 
+import sys
+import os
+
+# Add the parent directory (repository root) to the system path
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+    
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
