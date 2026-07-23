@@ -37,4 +37,5 @@ Thumbs.db
 # Data files (optional — remove if you want to share sample data)
 *.csv
 !examples/*.csv
+!Adj_df.csv
 pyproject.toml.bak
